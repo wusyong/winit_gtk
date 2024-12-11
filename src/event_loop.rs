@@ -13,7 +13,7 @@ use std::{error, fmt};
 
 use instant::{Duration, Instant};
 use once_cell::sync::OnceCell;
-use raw_window_handle::{HasRawDisplayHandle, RawDisplayHandle};
+use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle};
 
 use crate::{event::Event, monitor::MonitorHandle, platform_impl};
 
@@ -313,10 +313,14 @@ impl<T> EventLoop<T> {
     }
 }
 
-unsafe impl<T> HasRawDisplayHandle for EventLoop<T> {
+impl<T> HasDisplayHandle for EventLoop<T> {
     /// Returns a [`raw_window_handle::RawDisplayHandle`] for the event loop.
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        self.event_loop.window_target().p.raw_display_handle()
+    fn display_handle(&self) -> Result<DisplayHandle<'_>, HandleError> {
+        let display_handle = unsafe {
+            DisplayHandle::borrow_raw(self.event_loop.window_target().p.raw_display_handle())
+        };
+
+        Ok(display_handle)
     }
 }
 
@@ -368,10 +372,15 @@ impl<T> EventLoopWindowTarget<T> {
     }
 }
 
-unsafe impl<T> HasRawDisplayHandle for EventLoopWindowTarget<T> {
+impl<T> HasDisplayHandle for EventLoopWindowTarget<T> {
     /// Returns a [`raw_window_handle::RawDisplayHandle`] for the event loop.
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        self.p.raw_display_handle()
+    fn display_handle(
+        &self,
+    ) -> Result<raw_window_handle::DisplayHandle<'_>, raw_window_handle::HandleError> {
+        self.p.raw_display_handle();
+        let display_handler = unsafe { DisplayHandle::borrow_raw(self.p.raw_display_handle()) };
+
+        Ok(display_handler)
     }
 }
 

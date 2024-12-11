@@ -2,7 +2,7 @@
 use std::fmt;
 
 use raw_window_handle::{
-    HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
+    ActiveHandle, HandleError, HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WindowHandle
 };
 
 use crate::{
@@ -1342,6 +1342,15 @@ unsafe impl HasRawWindowHandle for Window {
     /// [`Event::Suspended`]: crate::event::Event::Suspended
     fn raw_window_handle(&self) -> RawWindowHandle {
         self.window.raw_window_handle()
+    }
+}
+
+impl HasWindowHandle for Window {
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        // Retrieve the raw window handle from the underlying GTK window
+        let raw_handle = self.raw_window_handle();
+        // Return the raw window handle wrapped in a WindowHandle
+        Ok(unsafe { WindowHandle::borrow_raw(raw_handle, ActiveHandle::new()) })
     }
 }
 

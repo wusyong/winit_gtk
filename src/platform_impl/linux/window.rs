@@ -1,6 +1,9 @@
 use std::{
     cell::RefCell,
     collections::VecDeque,
+    ffi::c_void,
+    os::raw::c_ulong,
+    ptr::NonNull,
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicI32, Ordering},
 };
@@ -160,7 +163,7 @@ impl Window {
         // Rest attributes
         window.set_title(&attribs.title);
         let fullscreen = attribs.fullscreen.map(|f| f.into());
-        if fullscreen != None {
+        if fullscreen.is_some() {
             let m = match fullscreen {
                 Some(Fullscreen::Exclusive(ref m)) => Some(&m.monitor),
                 Some(Fullscreen::Borderless(Some(ref m))) => Some(&m.monitor),
@@ -750,16 +753,31 @@ impl Window {
     #[inline]
     pub fn raw_window_handle(&self) -> RawWindowHandle {
         if self.is_wayland() {
-            let mut window_handle = WaylandWindowHandle::empty();
+            let dummy_ptr: *mut c_void = 1_usize as *mut c_void;
+            let dummy_nonnull = unsafe { NonNull::new_unchecked(dummy_ptr) };
+            let mut window_handle = WaylandWindowHandle::new(dummy_nonnull);
             if let Some(window) = self.window.window() {
                 window_handle.surface = unsafe {
-                    gdk_wayland_sys::gdk_wayland_window_get_wl_surface(window.as_ptr() as *mut _)
+                    if let Some(window_handler) = NonNull::new(window.as_ptr() as *mut _) {
+                        let raw_surface = gdk_wayland_sys::gdk_wayland_window_get_wl_surface(
+                            window_handler.as_ptr(),
+                        );
+
+                        if let Some(non_null_surface) = NonNull::new(raw_surface) {
+                            non_null_surface
+                        } else {
+                            panic!("failed to get surface");
+                        }
+                    } else {
+                        panic!("failed to get surface");
+                    }
                 };
             }
 
             RawWindowHandle::Wayland(window_handle)
         } else {
-            let mut window_handle = XlibWindowHandle::empty();
+            let dummy_ptr: c_ulong = 1_usize as c_ulong;
+            let mut window_handle = XlibWindowHandle::new(dummy_ptr);
             unsafe {
                 if let Some(window) = self.window.window() {
                     window_handle.window =
@@ -773,20 +791,33 @@ impl Window {
     #[inline]
     pub fn raw_display_handle(&self) -> RawDisplayHandle {
         if self.is_wayland() {
-            let mut display_handle = WaylandDisplayHandle::empty();
-            display_handle.display = unsafe {
-                gdk_wayland_sys::gdk_wayland_display_get_wl_display(
-                    self.window.display().as_ptr() as *mut _
-                )
-            };
+            let dummy_ptr: *mut c_void = 1_usize as *mut c_void;
+            let dummy_nonnull = unsafe { NonNull::new_unchecked(dummy_ptr) };
+            let mut display_handle = WaylandDisplayHandle::new(dummy_nonnull);
+            if let Some(window_display) = NonNull::new(self.window.display().as_ptr() as *mut _) {
+                let raw_display = unsafe {
+                    gdk_wayland_sys::gdk_wayland_display_get_wl_display(window_display.as_ptr())
+                };
+                if let Some(non_null_display) = NonNull::new(raw_display) {
+                    display_handle.display = non_null_display;
+                } else {
+                    eprintln!("Failed to get Wayland display.");
+                }
+            } else {
+                eprintln!("Failed to get window display.");
+            }
             RawDisplayHandle::Wayland(display_handle)
         } else {
-            let mut display_handle = XlibDisplayHandle::empty();
+            let dummy_ptr: *mut c_void = 1_usize as *mut c_void;
+            let dummy_nonnull = unsafe { NonNull::new_unchecked(dummy_ptr) };
+            let mut display_handle = XlibDisplayHandle::new(Some(dummy_nonnull), 0);
             unsafe {
                 if let Ok(xlib) = x11_dl::xlib::Xlib::open() {
                     let display = (xlib.XOpenDisplay)(std::ptr::null());
-                    display_handle.display = display as _;
-                    display_handle.screen = (xlib.XDefaultScreen)(display) as _;
+                    if let Some(non_null_display) = NonNull::new(display as *mut c_void) {
+                        display_handle.display = Some(non_null_display);
+                        display_handle.screen = (xlib.XDefaultScreen)(display) as _;
+                    }
                 }
             }
             RawDisplayHandle::Xlib(display_handle)

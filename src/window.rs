@@ -2,7 +2,7 @@
 use std::fmt;
 
 use raw_window_handle::{
-    ActiveHandle, HandleError, HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WindowHandle
+    DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawWindowHandle, WindowHandle,
 };
 
 use crate::{
@@ -1324,7 +1324,7 @@ impl Window {
             .map(|inner| MonitorHandle { inner })
     }
 }
-unsafe impl HasRawWindowHandle for Window {
+impl HasWindowHandle for Window {
     /// Returns a [`raw_window_handle::RawWindowHandle`] for the Window
     ///
     /// ## Platform-specific
@@ -1340,27 +1340,21 @@ unsafe impl HasRawWindowHandle for Window {
     ///
     /// [`Event::Resumed`]: crate::event::Event::Resumed
     /// [`Event::Suspended`]: crate::event::Event::Suspended
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        self.window.raw_window_handle()
-    }
-}
-
-impl HasWindowHandle for Window {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        // Retrieve the raw window handle from the underlying GTK window
-        let raw_handle = self.raw_window_handle();
-        // Return the raw window handle wrapped in a WindowHandle
-        Ok(unsafe { WindowHandle::borrow_raw(raw_handle, ActiveHandle::new()) })
+        let raw = unsafe { WindowHandle::borrow_raw(self.window.raw_window_handle()) };
+
+        Ok(raw)
     }
 }
 
-unsafe impl HasRawDisplayHandle for Window {
+impl HasDisplayHandle for Window {
     /// Returns a [`raw_window_handle::RawDisplayHandle`] used by the [`EventLoop`] that
     /// created a window.
     ///
     /// [`EventLoop`]: crate::event_loop::EventLoop
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        self.window.raw_display_handle()
+    fn display_handle(&self) -> Result<raw_window_handle::DisplayHandle<'_>, HandleError> {
+        let display = unsafe { DisplayHandle::borrow_raw(self.window.raw_display_handle()) };
+        Ok(display)
     }
 }
 

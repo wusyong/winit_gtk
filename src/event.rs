@@ -552,7 +552,7 @@ pub enum WindowEvent<'a> {
 impl Clone for WindowEvent<'static> {
     fn clone(&self) -> Self {
         use self::WindowEvent::*;
-        return match self {
+        match self {
             Resized(size) => Resized(*size),
             Moved(pos) => Moved(*pos),
             CloseRequested => CloseRequested,
@@ -658,11 +658,11 @@ impl Clone for WindowEvent<'static> {
                 unreachable!("Static event can't be about scale factor changing")
             }
             Occluded(occluded) => Occluded(*occluded),
-        };
+        }
     }
 }
 
-impl<'a> WindowEvent<'a> {
+impl WindowEvent<'_> {
     pub fn to_static(self) -> Option<WindowEvent<'static>> {
         use self::WindowEvent::*;
         match self {

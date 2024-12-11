@@ -1,7 +1,9 @@
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
+    ffi::c_void,
     process,
+    ptr::NonNull,
     rc::Rc,
     sync::atomic::{AtomicU32, Ordering},
     time::Instant,
@@ -872,7 +874,7 @@ impl<T: 'static> EventLoop<T> {
                         EventState::EventQueue => match control_flow {
                             ControlFlow::ExitWithCode(code) => {
                                 callback(Event::LoopDestroyed, window_target, &mut control_flow);
-                                break (code);
+                                break code;
                             }
                             _ => match events.try_recv() {
                                 Ok(event) => match event {
@@ -991,18 +993,31 @@ impl<T> EventLoopWindowTarget<T> {
 
     pub fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
         if self.is_wayland() {
-            let mut display_handle = WaylandDisplayHandle::empty();
+            let dummy_ptr: *mut c_void = 1_usize as *mut c_void;
+            let dummy_nonnull = unsafe { NonNull::new_unchecked(dummy_ptr) };
+            let mut display_handle = WaylandDisplayHandle::new(dummy_nonnull);
             display_handle.display = unsafe {
-                gdk_wayland_sys::gdk_wayland_display_get_wl_display(self.display.as_ptr() as *mut _)
+                let not_null_display = gdk_wayland_sys::gdk_wayland_display_get_wl_display(
+                    self.display.as_ptr() as *mut _,
+                );
+                if let Some(display) = NonNull::new(not_null_display) {
+                    display
+                } else {
+                    panic!("")
+                }
             };
             RawDisplayHandle::Wayland(display_handle)
         } else {
-            let mut display_handle = XlibDisplayHandle::empty();
+            let dummy_ptr: *mut c_void = 1_usize as *mut c_void;
+            let dummy_nonnull = unsafe { NonNull::new_unchecked(dummy_ptr) };
+            let mut display_handle = XlibDisplayHandle::new(Some(dummy_nonnull), 0);
             unsafe {
                 if let Ok(xlib) = x11_dl::xlib::Xlib::open() {
                     let display = (xlib.XOpenDisplay)(std::ptr::null());
-                    display_handle.display = display as _;
-                    display_handle.screen = (xlib.XDefaultScreen)(display) as _;
+                    if let Some(non_null_display) = NonNull::new(display as *mut c_void) {
+                        display_handle.display = Some(non_null_display);
+                        display_handle.screen = (xlib.XDefaultScreen)(display) as _;
+                    }
                 }
             }
             RawDisplayHandle::Xlib(display_handle)

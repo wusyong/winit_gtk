@@ -22,7 +22,9 @@ fn main() {
             .with_position(Position::Logical(LogicalPosition::new(0.0, 0.0)))
             .with_visible(true);
         // `with_parent_window` is unsafe. Parent window must be a valid window.
-        builder = unsafe { builder.with_parent_window(Some(parent.expect("failed for raw handler").into())) };
+        builder = unsafe {
+            builder.with_parent_window(Some(parent.expect("failed for raw handler").into()))
+        };
         let child_window = builder.build(event_loop).unwrap();
 
         let id = child_window.id();
